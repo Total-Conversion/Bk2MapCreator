@@ -1,4 +1,7 @@
 import os
+import cv2
+import math
+
 
 HEADER_LENGTH = 38
 HEIGHT_FOOTER_LENGTH = 22
@@ -10,6 +13,8 @@ SECOND_FILE_CONTROL_SUM_OFFSET = 10
 POST_HEIGHT_FIRST_VALUE_CONST = 37
 POST_HEIGHT_LAST_VALUE_CONST = 34
 TIMESTAMP = 18940734
+GRAPHIC_FILE = 'input/map.png'
+
 
 def get_rolling_integer(int):
     rolling_int = []
@@ -17,6 +22,8 @@ def get_rolling_integer(int):
         rolling_int.append(255)
     rolling_int.append(int % 255)
     return rolling_int
+
+
 class MapCreator:
     n = -1
     header = []
@@ -37,6 +44,7 @@ class MapCreator:
 
     def get_tiles_count(self):
         return self.get_side_tiles_count() ** 2
+
     def get_third_header_value(self):
         n = self.n
         return 8 * n ** 2 + n
@@ -64,6 +72,7 @@ class MapCreator:
         rolling_length = len(get_rolling_integer(control_sum))
         length = const + len_a + len_b + len_c + rolling_length + n ** 2
         return length
+
     def get_file_length(self):
         length = HEADER_LENGTH + HEIGHT_FOOTER_LENGTH + POST_HEIGHT_SECTOR_FOOTER_LENGTH + BEFORE_TEXTURE_SECTOR_FOOTER_LENGTH + TEXTURE_FOOTER_LENGTH
         tiles_count = self.get_tiles_count()
@@ -73,7 +82,7 @@ class MapCreator:
         texture_data_sector_length = tiles_count
         post_texture_sector_length = 4 * tiles_count
         footer_length = self.get_footer_length()
-        length +=height_map_length + post_height_sector_length + before_texture_sector_length + texture_data_sector_length + post_texture_sector_length + footer_length
+        length += height_map_length + post_height_sector_length + before_texture_sector_length + texture_data_sector_length + post_texture_sector_length + footer_length
         return length
 
     def create_header(self):
@@ -100,8 +109,26 @@ class MapCreator:
         self.header += PADDING6
         self.header += create_u24(self.get_third_header_value())
 
+    # NOTE: LEAVE FOR FUTURE TESTING
+    def xxx(self, number_a, number_b):
+        return int((math.log(1.01**((255 * number_b) + number_a - 16448))*50 + 16448))
+
     def create_height(self):
-        self.height = [0,   0,  128,    64] * self.get_tiles_count()
+        if os.path.isfile(GRAPHIC_FILE):
+            img = cv2.imread(GRAPHIC_FILE, cv2.IMREAD_GRAYSCALE)
+            img = cv2.resize(img, (self.get_side_tiles_count(), self.get_side_tiles_count()), interpolation=cv2.INTER_AREA)
+            img = cv2.flip(img, 0)
+            rows, cols = img.shape
+            self.height = []
+            for i in range(rows):
+                for j in range(cols):
+                    offset = 2*(img[i, j]-64)
+                    self.height.append(0)
+                    self.height.append(0)
+                    self.height.append((128 + offset) % 255)
+                    self.height.append(64 + (128 + offset)//255)
+        else:
+            self.height = [0, 0, 128, 64] * self.get_tiles_count()
 
     def create_height_footer(self):
         PADDING1 = [3,  43]
@@ -129,9 +156,11 @@ class MapCreator:
         for i in range(25, 28):
             ret += [12, 2, 8, 0, 0, 0, 0, i]
         return ret
+
     def get_post_height_sector_footer_first_value(self):
         n = self.n
         return 512*n**2 + 64*n + POST_HEIGHT_FIRST_VALUE_CONST
+
     def create_post_height_sector_footer(self):
         PADDING1 = [4,  8]
         PADDING2 = [5,  8]
@@ -213,7 +242,7 @@ class MapCreator:
         lengths = self.get_lengths_of_footer_bytes()
         footer_length = self.get_footer_length()
         first_footer_control_sum = 2*footer_length - 14
-        first_footer_control_sum -= 5* int(first_footer_control_sum>255)
+        first_footer_control_sum -= 5 * int(first_footer_control_sum>255)
 
         second_footer_control_sum = footer_length - 15
         second_footer_control_sum -= 3* int(lengths[0]>1)
@@ -248,10 +277,15 @@ class MapCreator:
 
 def create_u32(a):
     return  [byte for byte in bytearray(a.to_bytes(4, "little"))]
+
+
 def create_u24(a):
     return  [byte for byte in bytearray(a.to_bytes(3, "little"))]
+
+
 def create_u16(a):
     return  [byte for byte in bytearray(a.to_bytes(2, "little"))]
+
 
 def create_u_custom(a,size):
     return  [byte for byte in bytearray(a.to_bytes(size, "little"))]
@@ -285,13 +319,15 @@ def run_tests():
         assert len(map.before_texture_sector_footer) == BEFORE_TEXTURE_SECTOR_FOOTER_LENGTH
         assert len(map.texture_data_sector) == map.get_tiles_count()
         assert len(map.texture_footer) == TEXTURE_FOOTER_LENGTH
-        assert len(map.post_texture_sector) == map.get_tiles_count() *4
+        assert len(map.post_texture_sector) == map.get_tiles_count() * 4
         assert len(map.footer) == map.get_footer_length()
         assert map.get_file_length() == len(map.create_map())
+
+
 if __name__ == '__main__':
     run_tests()
     map = MapCreator()
-    map.n = 22
+    map.n = 20
     root = os.path.abspath(os.curdir)
     newFile = open(f'{root}\output\map.b2m', "wb")
     newFile.write(bytearray(map.create_map()))
