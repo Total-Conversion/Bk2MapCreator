@@ -327,7 +327,7 @@ def run_tests():
 if __name__ == '__main__':
     run_tests()
     map = MapCreator()
-    map.n = 20
+    map.n = 21
     root = os.path.abspath(os.curdir)
     newFile = open(f'{root}\output\map.b2m', "wb")
     newFile.write(bytearray(map.create_map()))
