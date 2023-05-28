@@ -180,7 +180,10 @@ class MapCreator:
         self.post_height_sector_footer += create_u32(self.get_post_height_sector_footer_first_value() - POST_HEIGHT_LAST_VALUE_CONST)
 
     def create_before_texture_sector(self):
-        self.before_texture_sector = [0] * self.get_tiles_count()
+        if os.path.isfile(MAP_FILE) and IMPORT_FROM_FILES == "b2m":
+            self.before_texture_sector = self.read_before_texture_data_sector_from_b2m()
+        else:
+            self.before_texture_sector = [0] * self.get_tiles_count()
 
     def get_before_texture_sector_footer_long_padding(self):
         ret = []
@@ -232,7 +235,11 @@ class MapCreator:
         self.texture_footer += create_u24(self.get_third_header_value())
 
     def create_post_texture_sector(self):
-        self.post_texture_sector = [0] * self.get_tiles_count()*4
+        if os.path.isfile(MAP_FILE) and IMPORT_FROM_FILES == "b2m":
+            # self.post_texture_sector = self.read_post_texture_data_sector_from_b2m()
+            self.post_texture_sector = [0] * self.get_tiles_count() * 4
+        else:
+            self.post_texture_sector = [0] * self.get_tiles_count() * 4
 
     def create_footer(self):
         n = self.n
@@ -295,19 +302,25 @@ class MapCreator:
         b2m_bytes = [byte for byte in bytearray(b2m_map.read())]
         offset = 0
         offset += 38  # header
-        height_bytes = bytearray(b2m_bytes[offset:offset + (((MAP_FILE_N * 16 + 1) ** 2) * 4)])
-        height_bytes = list(struct.unpack('i' * (len(height_bytes) // 4), height_bytes))
-        height_values = self.resize_height(height_bytes)
+        height_bytes = b2m_bytes[offset:offset + (((MAP_FILE_N * 16 + 1) ** 2) * 4)]
+        height_values = [(height_bytes[i] << 24) + (height_bytes[i + 1] << 16) + (height_bytes[i + 2] << 8) + height_bytes[i + 3] for i in range(0, len(height_bytes), 4)]
+        height_values = self.resize_height(height_values)
         height_bytes = list(map(lambda x: create_u32(x, direction="big"), height_values))
         height_bytes = [item for sublist in height_bytes for item in sublist]
         return height_bytes
 
-    def resize_height(self, height_bytes):
-        current_size = int(len(height_bytes) ** 0.5)  # Assuming square surface
-        height_image = Image.new('L', (current_size, current_size), 0)
-        height_image.putdata(height_bytes)
-        resized_image = height_image.resize((self.get_side_tiles_count(), self.get_side_tiles_count()), Image.NEAREST)
-        resized_height = list(resized_image.getdata())
+    def resize_height(self, height_values):
+        resized_height = []
+        current_size = int(len(height_values) ** 0.5)  # Assuming square surface
+        scale_factor = self.get_side_tiles_count() / current_size
+
+        for row in range(self.get_side_tiles_count()):
+            for col in range(self.get_side_tiles_count()):
+                orig_row = round(row / scale_factor)
+                orig_col = round(col / scale_factor)
+                height = height_values[orig_row * current_size + orig_col]
+                resized_height.append(height)
+
         return resized_height
 
     def read_texture_data_sector_from_b2m(self):
@@ -320,8 +333,38 @@ class MapCreator:
         offset += 4 * ((MAP_FILE_N * 16 + 1) ** 2)  # post height sector
         offset += 88                                # post height sector footer
         offset += ((MAP_FILE_N * 16 + 1) ** 2)      # before texture sector
-        offset += 88                                # post before texture sector footer
+        offset += 88                                # before texture sector footer
         texture_ids = bytearray(b2m_bytes[offset:offset + ((MAP_FILE_N * 16 + 1) ** 2)])
+        resized_texture_ids = self.resize_texture_ids(texture_ids)
+        return resized_texture_ids
+
+    def read_before_texture_data_sector_from_b2m(self):
+        b2m_map = open(MAP_FILE, 'rb')
+        b2m_bytes = [byte for byte in bytearray(b2m_map.read())]
+        offset = 0
+        offset += 38                                # header
+        offset += 4 * ((MAP_FILE_N * 16 + 1) ** 2)  # height
+        offset += 22                                # height footer
+        offset += 4 * ((MAP_FILE_N * 16 + 1) ** 2)  # post height sector
+        offset += 88                                # post height sector footer
+        texture_ids = bytearray(b2m_bytes[offset:offset + ((MAP_FILE_N * 16 + 1) ** 2)])
+        resized_texture_ids = self.resize_texture_ids(texture_ids)
+        return resized_texture_ids
+
+    def read_post_texture_data_sector_from_b2m(self):
+        b2m_map = open(MAP_FILE, 'rb')
+        b2m_bytes = [byte for byte in bytearray(b2m_map.read())]
+        offset = 0
+        offset += 38                                # header
+        offset += 4 * ((MAP_FILE_N * 16 + 1) ** 2)  # height
+        offset += 22                                # height footer
+        offset += 4 * ((MAP_FILE_N * 16 + 1) ** 2)  # post height sector
+        offset += 88                                # post height sector footer
+        offset += ((MAP_FILE_N * 16 + 1) ** 2)      # before texture sector
+        offset += 88                                # before texture sector footer
+        offset += ((MAP_FILE_N * 16 + 1) ** 2)      # texture sector
+        offset += 28                                # texture sector footer
+        texture_ids = bytearray(b2m_bytes[offset:offset + 4*((MAP_FILE_N * 16 + 1) ** 2)])
         resized_texture_ids = self.resize_texture_ids(texture_ids)
         return resized_texture_ids
 
