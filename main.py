@@ -1,6 +1,8 @@
 import os
 import cv2
 import math
+from PIL import Image
+import struct
 
 
 HEADER_LENGTH = 38
@@ -14,6 +16,9 @@ POST_HEIGHT_FIRST_VALUE_CONST = 37
 POST_HEIGHT_LAST_VALUE_CONST = 34
 TIMESTAMP = 18940734
 GRAPHIC_FILE = 'input/map.png'
+MAP_FILE = 'input/map.b2m'
+MAP_FILE_N = 21
+IMPORT_FROM_FILES = "b2m"  # none/png/b2m
 
 
 def get_rolling_integer(int):
@@ -114,19 +119,10 @@ class MapCreator:
         return int((math.log(1.01**((255 * number_b) + number_a - 16448))*50 + 16448))
 
     def create_height(self):
-        if os.path.isfile(GRAPHIC_FILE):
-            img = cv2.imread(GRAPHIC_FILE, cv2.IMREAD_GRAYSCALE)
-            img = cv2.resize(img, (self.get_side_tiles_count(), self.get_side_tiles_count()), interpolation=cv2.INTER_AREA)
-            img = cv2.flip(img, 0)
-            rows, cols = img.shape
-            self.height = []
-            for i in range(rows):
-                for j in range(cols):
-                    offset = 2*(img[i, j]-64)
-                    self.height.append(0)
-                    self.height.append(0)
-                    self.height.append((128 + offset) % 255)
-                    self.height.append(64 + (128 + offset)//255)
+        if os.path.isfile(GRAPHIC_FILE) and IMPORT_FROM_FILES == "png":
+            self.height = self.read_height_from_png()
+        elif os.path.isfile(MAP_FILE) and IMPORT_FROM_FILES == "b2m":
+            self.height = self.read_height_from_b2m()
         else:
             self.height = [0, 0, 128, 64] * self.get_tiles_count()
 
@@ -210,7 +206,12 @@ class MapCreator:
         self.before_texture_sector_footer += create_u32(self.get_post_height_sector_footer_first_value() - POST_HEIGHT_LAST_VALUE_CONST)
 
     def create_texture_data_sector(self):
-        self.texture_data_sector = [0]*self.get_tiles_count()
+        if os.path.isfile(GRAPHIC_FILE) and IMPORT_FROM_FILES == "png":
+            self.texture_data_sector = [0] * self.get_tiles_count()
+        elif os.path.isfile(MAP_FILE) and IMPORT_FROM_FILES == "b2m":
+            self.texture_data_sector = self.read_texture_data_sector_from_b2m()
+        else:
+            self.texture_data_sector = [0] * self.get_tiles_count()
 
     def create_texture_footer(self):
         PADDING1 = [36, 8]
@@ -274,21 +275,85 @@ class MapCreator:
         self.create_footer()
         return self.header + self.height + self.height_footer + self.post_height_sector + self.post_height_sector_footer + self.before_texture_sector + self.before_texture_sector_footer + self.texture_data_sector + self.texture_footer + self.post_texture_sector + self.footer
 
+    def read_height_from_png(self):
+        img = cv2.imread(GRAPHIC_FILE, cv2.IMREAD_GRAYSCALE)
+        img = cv2.resize(img, (self.get_side_tiles_count(), self.get_side_tiles_count()), interpolation=cv2.INTER_AREA)
+        img = cv2.flip(img, 0)
+        rows, cols = img.shape
+        height = []
+        for i in range(rows):
+            for j in range(cols):
+                offset = 2 * (img[i, j] - 64)
+                height.append(0)
+                height.append(0)
+                height.append((128 + offset) % 255)
+                height.append(64 + (128 + offset) // 255)
+        return height
 
-def create_u32(a):
-    return  [byte for byte in bytearray(a.to_bytes(4, "little"))]
+    def read_height_from_b2m(self):
+        b2m_map = open(MAP_FILE, 'rb')
+        b2m_bytes = [byte for byte in bytearray(b2m_map.read())]
+        offset = 0
+        offset += 38  # header
+        height_bytes = bytearray(b2m_bytes[offset:offset + (((MAP_FILE_N * 16 + 1) ** 2) * 4)])
+        height_bytes = list(struct.unpack('i' * (len(height_bytes) // 4), height_bytes))
+        height_values = self.resize_height(height_bytes)
+        height_bytes = list(map(lambda x: create_u32(x, direction="big"), height_values))
+        height_bytes = [item for sublist in height_bytes for item in sublist]
+        return height_bytes
+
+    def resize_height(self, height_bytes):
+        current_size = int(len(height_bytes) ** 0.5)  # Assuming square surface
+        height_image = Image.new('L', (current_size, current_size), 0)
+        height_image.putdata(height_bytes)
+        resized_image = height_image.resize((self.get_side_tiles_count(), self.get_side_tiles_count()), Image.NEAREST)
+        resized_height = list(resized_image.getdata())
+        return resized_height
+
+    def read_texture_data_sector_from_b2m(self):
+        b2m_map = open(MAP_FILE, 'rb')
+        b2m_bytes = [byte for byte in bytearray(b2m_map.read())]
+        offset = 0
+        offset += 38                                # header
+        offset += 4 * ((MAP_FILE_N * 16 + 1) ** 2)  # height
+        offset += 22                                # height footer
+        offset += 4 * ((MAP_FILE_N * 16 + 1) ** 2)  # post height sector
+        offset += 88                                # post height sector footer
+        offset += ((MAP_FILE_N * 16 + 1) ** 2)      # before texture sector
+        offset += 88                                # post before texture sector footer
+        texture_ids = bytearray(b2m_bytes[offset:offset + ((MAP_FILE_N * 16 + 1) ** 2)])
+        resized_texture_ids = self.resize_texture_ids(texture_ids)
+        return resized_texture_ids
+
+    def resize_texture_ids(self, texture_ids):
+        resized_texture_ids = []
+        current_size = int(len(texture_ids) ** 0.5)
+        scale_factor = self.get_side_tiles_count() / current_size
+
+        for row in range(self.get_side_tiles_count()):
+            for col in range(self.get_side_tiles_count()):
+                orig_row = round(row / scale_factor)
+                orig_col = round(col / scale_factor)
+                texture_id = texture_ids[orig_row * current_size + orig_col]
+                resized_texture_ids.append(texture_id)
+
+        return resized_texture_ids
 
 
-def create_u24(a):
-    return  [byte for byte in bytearray(a.to_bytes(3, "little"))]
+def create_u32(a, direction="little"):
+    return [byte for byte in bytearray(a.to_bytes(4, direction))]
 
 
-def create_u16(a):
-    return  [byte for byte in bytearray(a.to_bytes(2, "little"))]
+def create_u24(a, direction="little"):
+    return [byte for byte in bytearray(a.to_bytes(3, direction))]
 
 
-def create_u_custom(a,size):
-    return  [byte for byte in bytearray(a.to_bytes(size, "little"))]
+def create_u16(a, direction="little"):
+    return [byte for byte in bytearray(a.to_bytes(2, direction))]
+
+
+def create_u_custom(a,size, direction="little"):
+    return [byte for byte in bytearray(a.to_bytes(size, direction))]
 
 
 def run_tests():
@@ -325,10 +390,10 @@ def run_tests():
 
 
 if __name__ == '__main__':
-    run_tests()
-    map = MapCreator()
-    map.n = 21
+    # run_tests()
+    map_creator = MapCreator()
+    map_creator.n = 20
     root = os.path.abspath(os.curdir)
     newFile = open(f'{root}\output\map.b2m', "wb")
-    newFile.write(bytearray(map.create_map()))
+    newFile.write(bytearray(map_creator.create_map()))
     # write to file
