@@ -17,8 +17,11 @@ POST_HEIGHT_LAST_VALUE_CONST = 34
 TIMESTAMP = 18940734
 GRAPHIC_FILE = 'input/map.png'
 MAP_FILE = 'input/map.b2m'
-MAP_FILE_N = 21
+MAP_FILE_N = 18
 IMPORT_FROM_FILES = "b2m"  # none/png/b2m
+TEMP = [24, 1, 8, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 33,
+        24, 1, 8, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 34, 40, 1, 8, 0, 0, 0, 0, 2,
+        24, 1, 8, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 35]
 
 
 def get_rolling_integer(int):
@@ -181,7 +184,8 @@ class MapCreator:
 
     def create_before_texture_sector(self):
         if os.path.isfile(MAP_FILE) and IMPORT_FROM_FILES == "b2m":
-            self.before_texture_sector = self.read_before_texture_data_sector_from_b2m()
+            # self.before_texture_sector = self.read_before_texture_data_sector_from_b2m()
+            self.before_texture_sector = [0] * self.get_tiles_count()
         else:
             self.before_texture_sector = [0] * self.get_tiles_count()
 
@@ -190,7 +194,7 @@ class MapCreator:
         ret += [28]
         for i in range(31, 33):
             ret += [12, 2, 8, 0, 0, 0, 0, i]
-        ret +=[24,1,8,0,0,0,0,2,8,0,0,0,0,33,24,1,8,0,0,0,0,2,8,0,0,0,0,34,40,1,8,0,0,0,0,2,24,1,8,0,0,0,0,2,8,0,0,0,0,35]
+        ret += TEMP
         return ret
 
     def create_before_texture_sector_footer(self):
@@ -326,14 +330,18 @@ class MapCreator:
     def read_texture_data_sector_from_b2m(self):
         b2m_map = open(MAP_FILE, 'rb')
         b2m_bytes = [byte for byte in bytearray(b2m_map.read())]
-        offset = 0
-        offset += 38                                # header
-        offset += 4 * ((MAP_FILE_N * 16 + 1) ** 2)  # height
-        offset += 22                                # height footer
-        offset += 4 * ((MAP_FILE_N * 16 + 1) ** 2)  # post height sector
-        offset += 88                                # post height sector footer
-        offset += ((MAP_FILE_N * 16 + 1) ** 2)      # before texture sector
-        offset += 88                                # before texture sector footer
+        # offset = 0
+        # offset += 38                                # header
+        # offset += 4 * ((MAP_FILE_N * 16 + 1) ** 2)  # height
+        # offset += 22                                # height footer
+        # offset += 4 * ((MAP_FILE_N * 16 + 1) ** 2)  # post height sector
+        # offset += 88                                # post height sector footer
+        # offset += ((MAP_FILE_N * 16 + 1) ** 2)      # before texture sector
+        # offset += 88                                # before texture sector footer
+
+        _, offset = find_sequence_indices(b2m_bytes, TEMP)  # before texture sector footer middle
+        offset += 21                                        # before texture sector footer
+
         texture_ids = bytearray(b2m_bytes[offset:offset + ((MAP_FILE_N * 16 + 1) ** 2)])
         resized_texture_ids = self.resize_texture_ids(texture_ids)
         return resized_texture_ids
@@ -365,7 +373,8 @@ class MapCreator:
         offset += ((MAP_FILE_N * 16 + 1) ** 2)      # texture sector
         offset += 28                                # texture sector footer
         texture_ids = bytearray(b2m_bytes[offset:offset + 4*((MAP_FILE_N * 16 + 1) ** 2)])
-        resized_texture_ids = self.resize_texture_ids(texture_ids)
+        # resized_texture_ids = self.resize_texture_ids(texture_ids)
+        resized_texture_ids = texture_ids[:self.get_tiles_count()]
         return resized_texture_ids
 
     def resize_texture_ids(self, texture_ids):
@@ -382,6 +391,20 @@ class MapCreator:
 
         return resized_texture_ids
 
+
+def find_sequence_indices(lst, sequence):
+    seq_len = len(sequence)
+    first_index = -1
+    next_index = -1
+
+    for i in range(len(lst) - seq_len + 1):
+        if lst[i:i+seq_len] == sequence:
+            if first_index == -1:
+                first_index = i
+            next_index = i + seq_len
+            break
+
+    return first_index, next_index
 
 def create_u32(a, direction="little"):
     return [byte for byte in bytearray(a.to_bytes(4, direction))]
