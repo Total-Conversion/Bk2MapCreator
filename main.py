@@ -15,13 +15,42 @@ SECOND_FILE_CONTROL_SUM_OFFSET = 10
 POST_HEIGHT_FIRST_VALUE_CONST = 37
 POST_HEIGHT_LAST_VALUE_CONST = 34
 TIMESTAMP = 18940734
-GRAPHIC_FILE = 'input/map.png'
+HEIGHT_GRAPHIC_FILE = 'input/map.png'
+TEXTURE_GRAPHIC_FILE = 'input/map2.png'
 MAP_FILE = 'input/map.b2m'
 MAP_FILE_N = 18
-IMPORT_FROM_FILES = "b2m"  # none/png/b2m
+IMPORT_FROM_FILES = "png"  # none/png/b2m
 TEMP = [24, 1, 8, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 33,
         24, 1, 8, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 34, 40, 1, 8, 0, 0, 0, 0, 2,
         24, 1, 8, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 35]
+SEASON = 'SPRING'
+TEXTURES = {
+    'SPRING': {
+        # 'Dirt':             {'id': 0,   'rgb': [181, 145, 0]},
+        'DryGrass':         {'id': 1,   'rgb': [135, 177, 0]},
+        'DryGrass':         {'id': 1,   'rgb': [131, 173, 0]},
+        # 'Field':            {'id': 2,   'rgb': [0, 0, 0]},
+        'Forest':           {'id': 3,   'rgb': [0, 142, 0]},
+        'Forest':           {'id': 3,   'rgb': [181, 145, 0]},
+        # 'Ground':           {'id': 4,   'rgb': [181, 145, 0]},
+        # 'Pavement':         {'id': 5,   'rgb': [0, 0, 0]},
+        # 'Sand':             {'id': 6,   'rgb': [0, 0, 0]},
+        # 'Snow':             {'id': 7,   'rgb': [0, 0, 0]},
+        # 'SnowGround':       {'id': 8,   'rgb': [226, 0, 0]},
+        'UsedGrass':        {'id': 9,   'rgb': [131, 171, 0]},
+        'UsedGrassGround':  {'id': 10,  'rgb': [161, 156, 0]},
+        # 'UsedGround':       {'id': 11,  'rgb': [219, 195, 127]},
+        # 'Asphalt':          {'id': 12,  'rgb': [0, 0, 0]},
+        # 'Field1':           {'id': 13,  'rgb': [0, 0, 0]},
+        # 'GreenField':       {'id': 14,  'rgb': [0, 0, 0]},
+        # 'GreenField1':      {'id': 15,  'rgb': [0, 0, 0]},
+        'GroundStone':      {'id': 16,  'rgb': [239, 127, 0]},
+        # 'LightField':       {'id': 17,  'rgb': [0, 0, 0]},
+        # 'LightField1':      {'id': 18,  'rgb': [0, 0, 0]},
+        'MeltedSnow':       {'id': 19,  'rgb': [226, 0, 0]},
+        # 'LightSand':        {'id': 20,  'rgb': [228, 169, 116]},
+    }
+}
 
 
 def get_rolling_integer(int):
@@ -122,7 +151,7 @@ class MapCreator:
         return int((math.log(1.01**((255 * number_b) + number_a - 16448))*50 + 16448))
 
     def create_height(self):
-        if os.path.isfile(GRAPHIC_FILE) and IMPORT_FROM_FILES == "png":
+        if os.path.isfile(HEIGHT_GRAPHIC_FILE) and IMPORT_FROM_FILES == "png":
             self.height = self.read_height_from_png()
         elif os.path.isfile(MAP_FILE) and IMPORT_FROM_FILES == "b2m":
             self.height = self.read_height_from_b2m()
@@ -183,11 +212,7 @@ class MapCreator:
         self.post_height_sector_footer += create_u32(self.get_post_height_sector_footer_first_value() - POST_HEIGHT_LAST_VALUE_CONST)
 
     def create_before_texture_sector(self):
-        if os.path.isfile(MAP_FILE) and IMPORT_FROM_FILES == "b2m":
-            # self.before_texture_sector = self.read_before_texture_data_sector_from_b2m()
-            self.before_texture_sector = [0] * self.get_tiles_count()
-        else:
-            self.before_texture_sector = [0] * self.get_tiles_count()
+        self.before_texture_sector = [0] * self.get_tiles_count()
 
     def get_before_texture_sector_footer_long_padding(self):
         ret = []
@@ -213,8 +238,8 @@ class MapCreator:
         self.before_texture_sector_footer += create_u32(self.get_post_height_sector_footer_first_value() - POST_HEIGHT_LAST_VALUE_CONST)
 
     def create_texture_data_sector(self):
-        if os.path.isfile(GRAPHIC_FILE) and IMPORT_FROM_FILES == "png":
-            self.texture_data_sector = [0] * self.get_tiles_count()
+        if os.path.isfile(HEIGHT_GRAPHIC_FILE) and IMPORT_FROM_FILES == "png":
+            self.texture_data_sector = self.read_texture_data_sector_from_png()
         elif os.path.isfile(MAP_FILE) and IMPORT_FROM_FILES == "b2m":
             self.texture_data_sector = self.read_texture_data_sector_from_b2m()
         else:
@@ -239,11 +264,7 @@ class MapCreator:
         self.texture_footer += create_u24(self.get_third_header_value())
 
     def create_post_texture_sector(self):
-        if os.path.isfile(MAP_FILE) and IMPORT_FROM_FILES == "b2m":
-            # self.post_texture_sector = self.read_post_texture_data_sector_from_b2m()
-            self.post_texture_sector = [0] * self.get_tiles_count() * 4
-        else:
-            self.post_texture_sector = [0] * self.get_tiles_count() * 4
+        self.post_texture_sector = [0] * self.get_tiles_count() * 4
 
     def create_footer(self):
         n = self.n
@@ -287,7 +308,7 @@ class MapCreator:
         return self.header + self.height + self.height_footer + self.post_height_sector + self.post_height_sector_footer + self.before_texture_sector + self.before_texture_sector_footer + self.texture_data_sector + self.texture_footer + self.post_texture_sector + self.footer
 
     def read_height_from_png(self):
-        img = cv2.imread(GRAPHIC_FILE, cv2.IMREAD_GRAYSCALE)
+        img = cv2.imread(HEIGHT_GRAPHIC_FILE, cv2.IMREAD_GRAYSCALE)
         img = cv2.resize(img, (self.get_side_tiles_count(), self.get_side_tiles_count()), interpolation=cv2.INTER_AREA)
         img = cv2.flip(img, 0)
         rows, cols = img.shape
@@ -330,14 +351,6 @@ class MapCreator:
     def read_texture_data_sector_from_b2m(self):
         b2m_map = open(MAP_FILE, 'rb')
         b2m_bytes = [byte for byte in bytearray(b2m_map.read())]
-        # offset = 0
-        # offset += 38                                # header
-        # offset += 4 * ((MAP_FILE_N * 16 + 1) ** 2)  # height
-        # offset += 22                                # height footer
-        # offset += 4 * ((MAP_FILE_N * 16 + 1) ** 2)  # post height sector
-        # offset += 88                                # post height sector footer
-        # offset += ((MAP_FILE_N * 16 + 1) ** 2)      # before texture sector
-        # offset += 88                                # before texture sector footer
 
         _, offset = find_sequence_indices(b2m_bytes, TEMP)  # before texture sector footer middle
         offset += 21                                        # before texture sector footer
@@ -345,6 +358,26 @@ class MapCreator:
         texture_ids = bytearray(b2m_bytes[offset:offset + ((MAP_FILE_N * 16 + 1) ** 2)])
         resized_texture_ids = self.resize_texture_ids(texture_ids)
         return resized_texture_ids
+    
+    def read_texture_data_sector_from_png(self):
+        img = cv2.imread(TEXTURE_GRAPHIC_FILE, cv2.IMREAD_UNCHANGED)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = cv2.resize(img, (self.get_side_tiles_count(), self.get_side_tiles_count()), interpolation=cv2.INTER_AREA)
+        img = cv2.flip(img, 0)
+        rows, cols, _ = img.shape
+        texture = []
+        for i in range(rows):
+            for j in range(cols):
+                texture_id = sorted(
+                    TEXTURES[SEASON].items(),
+                    key=lambda x: math.sqrt(
+                        (x[1]['rgb'][0] - img[i, j][0]) ** 2 +
+                        (x[1]['rgb'][1] - img[i, j][1]) ** 2 +
+                        (x[1]['rgb'][2] - img[i, j][2]) ** 2
+                    )
+                )[0][1]['id']
+                texture.append(texture_id)
+        return texture
 
     def read_before_texture_data_sector_from_b2m(self):
         b2m_map = open(MAP_FILE, 'rb')
