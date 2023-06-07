@@ -18,12 +18,13 @@ TIMESTAMP = 18940734
 HEIGHT_GRAPHIC_FILE = 'input/map.png'
 TEXTURE_GRAPHIC_FILE = 'input/map2.png'
 MAP_FILE = 'input/map.b2m'
-MAP_FILE_N = 18
+MAP_FILE_N = 20
+MAX_HEIGHT = 30.0
 IMPORT_FROM_FILES = "png"  # none/png/b2m
 TEMP = [24, 1, 8, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 33,
         24, 1, 8, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 34, 40, 1, 8, 0, 0, 0, 0, 2,
         24, 1, 8, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 35]
-SEASON = 'SPRING'
+SEASON = 'SUMMER'
 TEXTURES = {
     'SPRING': {
         # 'Dirt':             {'id': 0,   'rgb': [181, 145, 0]},
@@ -49,6 +50,14 @@ TEXTURES = {
         # 'LightField1':      {'id': 18,  'rgb': [0, 0, 0]},
         'MeltedSnow':       {'id': 19,  'rgb': [226, 0, 0]},
         # 'LightSand':        {'id': 20,  'rgb': [228, 169, 116]},
+    },
+    'SUMMER': {
+        'DarkGrass':               {'id': 0,  'rgb': [220, 220, 220]},
+        'Grass':           {'id': 4,  'rgb': [153, 153, 153]},
+        'UsedGrass':           {'id': 9,  'rgb': [51, 51, 51]},
+        'UsedGrass2':           {'id': 9,  'rgb': [102, 102, 102]},
+        'UsedGround':           {'id': 10,  'rgb': [4, 4, 4]},
+        'Craig':                 {'id': 15, 'rgb': [255, 0, 0]},
     }
 }
 
@@ -315,11 +324,10 @@ class MapCreator:
         height = []
         for i in range(rows):
             for j in range(cols):
-                offset = 2 * (img[i, j] - 64)
-                height.append(0)
-                height.append(0)
-                height.append((128 + offset) % 255)
-                height.append(64 + (128 + offset) // 255)
+                bytes_data = struct.pack('f', MAX_HEIGHT*img[i, j]/255.0)
+                bytes_values = [int(byte) for byte in bytes_data]
+                for byte in bytes_values:
+                    height.append(byte)
         return height
 
     def read_height_from_b2m(self):
