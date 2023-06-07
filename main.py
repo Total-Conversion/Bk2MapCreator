@@ -18,9 +18,9 @@ TIMESTAMP = 18940734
 HEIGHT_GRAPHIC_FILE = 'input/map.png'
 TEXTURE_GRAPHIC_FILE = 'input/map2.png'
 MAP_FILE = 'input/map.b2m'
-MAP_FILE_N = 20
+MAP_FILE_N = 5
 MAX_HEIGHT = 30.0
-IMPORT_FROM_FILES = "png"  # none/png/b2m
+IMPORT_FROM_FILES = "b2m"  # none/png/b2m
 TEMP = [24, 1, 8, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 33,
         24, 1, 8, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 34, 40, 1, 8, 0, 0, 0, 0, 2,
         24, 1, 8, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 35]
@@ -345,7 +345,7 @@ class MapCreator:
     def resize_height(self, height_values):
         resized_height = []
         current_size = int(len(height_values) ** 0.5)  # Assuming square surface
-        scale_factor = self.get_side_tiles_count() / current_size
+        scale_factor = (self.get_side_tiles_count()-1) / (current_size-1)
 
         for row in range(self.get_side_tiles_count()):
             for col in range(self.get_side_tiles_count()):
@@ -421,7 +421,7 @@ class MapCreator:
     def resize_texture_ids(self, texture_ids):
         resized_texture_ids = []
         current_size = int(len(texture_ids) ** 0.5)
-        scale_factor = self.get_side_tiles_count() / current_size
+        scale_factor = (self.get_side_tiles_count()-1) / (current_size-1)
 
         for row in range(self.get_side_tiles_count()):
             for col in range(self.get_side_tiles_count()):
