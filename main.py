@@ -18,13 +18,13 @@ TIMESTAMP = 18940734
 HEIGHT_GRAPHIC_FILE = 'input/map.png'
 TEXTURE_GRAPHIC_FILE = 'input/map2.png'
 MAP_FILE = 'input/map.b2m'
-MAP_FILE_N = 5
-MAX_HEIGHT = 30.0
+MAP_FILE_N = 14
+MAX_HEIGHT = 24.0
 IMPORT_FROM_FILES = "b2m"  # none/png/b2m
 TEMP = [24, 1, 8, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 33,
         24, 1, 8, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 34, 40, 1, 8, 0, 0, 0, 0, 2,
         24, 1, 8, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 35]
-SEASON = 'SUMMER'
+SEASON = 'DESERT'
 TEXTURES = {
     'SPRING': {
         # 'Dirt':             {'id': 0,   'rgb': [181, 145, 0]},
@@ -58,6 +58,15 @@ TEXTURES = {
         'UsedGrass2':           {'id': 9,  'rgb': [102, 102, 102]},
         'UsedGround':           {'id': 10,  'rgb': [4, 4, 4]},
         'Craig':                 {'id': 15, 'rgb': [255, 0, 0]},
+    },
+    'DESERT': {
+        'Clay':               {'id': 0,  'rgb': [151, 122, 92]},
+        'DarkGround':           {'id': 1,  'rgb': [112, 56, 41]},
+        'DarkGround2':           {'id': 1,  'rgb': [85, 26, 8]},
+        'Ground':           {'id': 4,  'rgb': [143, 81, 58]},
+        'UsedGround':           {'id': 8,  'rgb': [187, 127, 93]},
+        'SandStone':           {'id': 10,  'rgb': [217, 182, 124]},
+        'Craig':           {'id': 15,  'rgb': [66, 50, 35]},
     }
 }
 
@@ -336,23 +345,26 @@ class MapCreator:
         offset = 0
         offset += 38  # header
         height_bytes = b2m_bytes[offset:offset + (((MAP_FILE_N * 16 + 1) ** 2) * 4)]
-        height_values = [(height_bytes[i] << 24) + (height_bytes[i + 1] << 16) + (height_bytes[i + 2] << 8) + height_bytes[i + 3] for i in range(0, len(height_bytes), 4)]
-        height_values = self.resize_height(height_values)
-        height_bytes = list(map(lambda x: create_u32(x, direction="big"), height_values))
-        height_bytes = [item for sublist in height_bytes for item in sublist]
+        height_values = [struct.unpack('f', bytes([height_bytes[i], height_bytes[i + 1], height_bytes[i + 2], height_bytes[i + 3]]))[0] for i in range(0, len(height_bytes), 4)]
+        height_bytes = self.resize_height(height_values)
         return height_bytes
 
     def resize_height(self, height_values):
         resized_height = []
         current_size = int(len(height_values) ** 0.5)  # Assuming square surface
         scale_factor = (self.get_side_tiles_count()-1) / (current_size-1)
+        x = int(math.sqrt(len(height_values)))
+        nested_heights = [height_values[i:i + x] for i in range(0, len(height_values), x)]
 
         for row in range(self.get_side_tiles_count()):
             for col in range(self.get_side_tiles_count()):
-                orig_row = round(row / scale_factor)
-                orig_col = round(col / scale_factor)
-                height = height_values[orig_row * current_size + orig_col]
-                resized_height.append(height)
+                orig_row = row / scale_factor
+                orig_col = col / scale_factor
+                interpolated_value = bilinear_interpolation(nested_heights, orig_col, orig_row)
+                bytes_data = struct.pack('f', interpolated_value)
+                bytes_values = [int(byte) for byte in bytes_data]
+                for byte in bytes_values:
+                    resized_height.append(byte)
 
         return resized_height
 
@@ -461,6 +473,34 @@ def create_u16(a, direction="little"):
 
 def create_u_custom(a,size, direction="little"):
     return [byte for byte in bytearray(a.to_bytes(size, direction))]
+
+
+def bilinear_interpolation(array, x, y):
+    x1 = int(x)
+    x2 = x1 + 1
+    if x2 >= len(array):
+        x2 = x1
+    y1 = int(y)
+    y2 = y1 + 1
+    if y2 >= len(array[0]):
+        y2 = y1
+
+    dx = x - x1
+    dy = y - y1
+
+    q11 = array[y1][x1]
+    q12 = array[y2][x1]
+    q21 = array[y1][x2]
+    q22 = array[y2][x2]
+
+    w1 = (1 - dx) * (1 - dy)
+    w2 = (1 - dx) * dy
+    w3 = dx * (1 - dy)
+    w4 = dx * dy
+
+    interpolated_value = w1 * q11 + w2 * q12 + w3 * q21 + w4 * q22
+
+    return interpolated_value
 
 
 def run_tests():
